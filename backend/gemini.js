@@ -190,12 +190,11 @@ async function parseDocument(filePath, documentType) {
   const imagePart = fileToGenerativePart(buffer, mimeType);
 
   // Try once
-  let result = await tryParse(model, PROMPTS, imagePart);
-  
+  let result = await tryParse(model, prompt, imagePart);
 
   // If failed, retry once
   if (!result) {
-    result = await tryParse(model, PROMPTS, imagePart);
+    result = await tryParse(model, prompt, imagePart);
   }
 
   console.log()
