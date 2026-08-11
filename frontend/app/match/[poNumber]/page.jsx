@@ -8,9 +8,9 @@ import StatusBadge from '../../../components/match/StatusBadge';
 import ComparisonTable from '../../../components/match/ComparisonTable';
 import POView from '../../../components/match/POView';
 import InvoiceView from '../../../components/match/InvoiceView';
+import FulfillmentItemsTable from '../../../components/match/FulfillmentItemsTable';
 import GrnView from '../../../components/match/GrnView';
-import SummaryCards from '../../../components/summary/SummaryCards';
-import AssociatedDocumentsTable from '../../../components/summary/AssociatedDocumentsTable';
+import SummaryTab from '../../../components/summary/SummaryTab';
 import Upload from '../../../components/documents/Upload';
 import { apiFetch } from '../../../lib/api';
 import { formatCurrency } from '../../../lib/constants';
@@ -115,7 +115,7 @@ export default function MatchPage() {
               )}
             </div>
           </div>
-          <Upload onUploaded={loadData} />
+          {/* <Upload onUploaded={loadData} /> */}
         </div>
 
         <div className="border-b border-border">
@@ -154,20 +154,11 @@ export default function MatchPage() {
         {activeTab === 'po' && (
           <div className="space-y-6">
             <POView poDocument={poDocument} />
-            <div className="bg-card rounded-lg border">
-              <div className="px-4 py-3 border-b border-border">
-                <h3 className="text-sm font-semibold">Item Comparison</h3>
-              </div>
-              <div className="p-4">
-                <ComparisonTable items={matchData.items || []} />
-              </div>
-            </div>
           </div>
         )}
 
         {activeTab === 'fulfillment' && (
           <div className="space-y-6">
-            {/* Fulfillment Summary Cards */}
             {matchData.items && matchData.items.length > 0 && (() => {
               const totalOrdered = matchData.items.reduce((s, i) => s + (i.poQty || 0), 0);
               const totalReceived = matchData.items.reduce((s, i) => s + (i.grnQty || 0), 0);
@@ -226,90 +217,12 @@ export default function MatchPage() {
               );
             })()}
 
- <InvoiceView
+            <FulfillmentItemsTable
+              poDocument={poDocument}
               invoice={invoices[selectedInvoiceIdx] || invoices[0]}
-              matchReasons={matchData.reasons || []}
-              matchItems={matchData.items || []}
+              grn={grns[selectedGrnIdx] || grns[0]}
             />
-            {/* Three-Way Comparison Table */}
-            {matchData.items && matchData.items.length > 0 && (
-              <div className="bg-card rounded-lg border">
-                <div className="px-4 py-3 border-b border-border">
-                  <h4 className="text-sm font-semibold">Three-Way Comparison</h4>
-                </div>
-                <div className="overflow-x-auto">
-                  <table className="min-w-full text-xs">
-                    <thead>
-                      <tr className="bg-muted/50">
-                        <th className="text-left px-3 py-2.5 border-b border-r border-border font-semibold">Item</th>
-                        <th className="text-right px-3 py-2.5 border-b border-r border-border font-semibold">PO Qty</th>
-                        <th className="text-right px-3 py-2.5 border-b border-r border-border font-semibold">GRN Qty</th>
-                        <th className="text-right px-3 py-2.5 border-b border-r border-border font-semibold">Invoice Qty</th>
-                        <th className="text-right px-3 py-2.5 border-b border-r border-border font-semibold">PO Rate</th>
-                        <th className="text-right px-3 py-2.5 border-b border-r border-border font-semibold">Invoice Rate</th>
-                        <th className="text-left px-3 py-2.5 border-b border-border font-semibold">Status</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {matchData.items.map((item, idx) => {
-                        const hasIssue = item.reasons && item.reasons.length > 0;
-                        let itemStatus = 'Matched';
-                        let itemStatusColor = 'text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950';
-                        if (!item.skuName) {
-                          itemStatus = 'Unmapped SKU';
-                          itemStatusColor = 'text-zinc-600 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-800';
-                        } else if (hasIssue) {
-                          if (item.reasons.includes('invoice_qty_exceeds_po_qty') || item.reasons.includes('invoice_qty_exceeds_grn_qty')) {
-                            itemStatus = 'Qty Mismatch';
-                            itemStatusColor = 'text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950';
-                          } else if (item.reasons.includes('price_mismatch')) {
-                            itemStatus = 'Rate Mismatch';
-                            itemStatusColor = 'text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950';
-                          } else if (item.reasons.includes('mrp_mismatch')) {
-                            itemStatus = 'MRP Mismatch';
-                            itemStatusColor = 'text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950';
-                          } else {
-                            itemStatus = 'Mismatch';
-                            itemStatusColor = 'text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950';
-                          }
-                        } else if (item.poQty > 0 && item.grnQty < item.poQty) {
-                          itemStatus = 'Pending';
-                          itemStatusColor = 'text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950';
-                        }
 
-                        return (
-                          <tr key={idx} className={`${hasIssue ? 'bg-amber-50/50 dark:bg-amber-950/50' : ''} hover:bg-muted/50`}>
-                            <td className="px-3 py-2 border-b border-r border-border">
-                              <div className="font-medium">{item.skuName || 'Unmapped SKU'}</div>
-                              <div className="text-muted-foreground">{item.erpCode || '-'}</div>
-                            </td>
-                            <td className="px-3 py-2 border-b border-r border-border text-right">{item.poQty || 0}</td>
-                            <td className="px-3 py-2 border-b border-r border-border text-right">{grns.length > 0 ? (item.grnQty || 0) : <span className="text-muted-foreground">-</span>}</td>
-                            <td className="px-3 py-2 border-b border-r border-border text-right">{item.invoiceQty || 0}</td>
-                            <td className="px-3 py-2 border-b border-r border-border text-right">{item.agreedRate ? formatCurrency(item.agreedRate) : '-'}</td>
-                            <td className="px-3 py-2 border-b border-r border-border text-right">
-                              {item.invoiceRate ? (
-                                <span className={item.reasons?.includes('price_mismatch') ? 'text-amber-600 dark:text-amber-400 font-semibold' : ''}>
-                                  {formatCurrency(item.invoiceRate)}
-                                </span>
-                              ) : '-'}
-                            </td>
-                            
-                            <td className="px-3 py-2 border-b border-border">
-                              <span className={`inline-block text-[10px] font-medium px-2 py-0.5 rounded-full ${itemStatusColor}`}>
-                                {itemStatus}
-                              </span>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
-
-            {/* Invoice Selector & Details */}
             {invoices.length > 1 && (
               <div className="flex gap-2 flex-wrap">
                 {invoices.map((inv, idx) => (
@@ -327,8 +240,6 @@ export default function MatchPage() {
                 ))}
               </div>
             )}
-
-           
           </div>
         )}
 
@@ -415,8 +326,7 @@ export default function MatchPage() {
 
         {activeTab === 'summary' && (
           <div className="space-y-6">
-            <SummaryCards summary={summary} />
-            <AssociatedDocumentsTable summary={summary} />
+            <SummaryTab summary={summary} matchData={matchData} />
           </div>
         )}
       </div>

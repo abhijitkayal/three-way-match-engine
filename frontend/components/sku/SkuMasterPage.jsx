@@ -40,8 +40,7 @@ export default function SkuMasterPage() {
       const query = search ? `?search=${encodeURIComponent(search)}` : '';
       console.log(query);
       const data = await apiFetch(`/masters/sku${query}`);
-     
-      console.log(data);
+      setSkus(data);
     } catch (err) {
       console.error(err);
     } finally {

@@ -6,7 +6,7 @@ import { ThemeProvider } from "@/components/theme-provider";
 const geist = Geist({subsets:['latin'],variable:'--font-sans'});
 
 export const metadata = {
-  title: 'Finify Match - Three-Way Match Engine',
+  title: 'Finifi Match - Three-Way Match Engine',
   description: 'Professional PO, GRN & Invoice Three-Way Matching for finance and procurement',
 };
 

@@ -24,21 +24,6 @@ function escapeRegex(str) {
   return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-// Resolve all items in a document and attach SKU references
-// async function resolveDocumentItems(items, codeField = 'itemCode') {
-//   const resolved = [];
-//   for (const item of items) {
-//     const { skuMaster, warning } = await resolveSku(item[codeField]);
-//     resolved.push({
-//       ...item,
-//       skuMaster: skuMaster ? skuMaster._id : null,
-//       skuName: skuMaster ? skuMaster.name : null,
-//       warning,
-//     });
-//   }
-//   return resolved;
-// }
-
 async function resolveAndSaveDocumentItems(document, codeField = 'itemCode') {
   if (!document || !Array.isArray(document.items)) {
     return [];
@@ -55,104 +40,6 @@ async function resolveAndSaveDocumentItems(document, codeField = 'itemCode') {
   await document.save();
 
   return document.items;
-}
-// Aggregate quantities by SKU (or by raw itemCode if unresolved)
-// function aggregateBySku(items, qtyField) {
-//   const map = {};
-
-//   for (const item of items) {
-//     // Use skuMaster._id as key, or normalized raw itemCode as fallback
-//     const key = item.skuMaster
-//       ? String(item.skuMaster)
-//       : `raw:${(item.itemCode || '').trim().toLowerCase()}`;
-
-//     if (!map[key]) {
-//       map[key] = {
-//         skuMaster: item.skuMaster,
-//         skuName: item.skuName || null,
-//         itemCode: item.itemCode || '',
-//         description: item.description || '',
-//         totalQty: 0,
-//         warnings: [],
-//         rate: item.unitRate || 0,
-//         mrp: item.mrp || 0,
-//       };
-//     }
-
-//     map[key].totalQty += Number(item[qtyField]) || 0;
-
-//     // Track rate and mrp from invoice items
-//     if (item.unitRate) map[key].rate = item.unitRate;
-//     if (item.mrp) map[key].mrp = item.mrp;
-
-//     if (item.warning) {
-//       map[key].warnings.push(item.warning);
-//     }
-//   }
-
-//   return map;
-// }
-
-function aggregateBySku(items, qtyField) {
-  const map = {};
-
-  for (const rawItem of items) {
-    // Convert Mongoose subdocument to plain object
-    const item = rawItem?.toObject
-      ? rawItem.toObject()
-      : rawItem;
-
-    const rawCode = item.itemCode != null
-      ? String(item.itemCode).trim()
-      : '';
-
-    const key = item.skuMaster
-      ? String(item.skuMaster)
-      : `raw:${rawCode.toLowerCase()}`;
-
-    // IMPORTANT: read the actual quantity field
-    const quantity = Number(item[qtyField]) || 0;
-
-    console.log(
-      `AGGREGATE -> code: ${rawCode}, field: ${qtyField}, value:`,
-      item[qtyField],
-      `=> quantity: ${quantity}`
-    );
-
-    if (!map[key]) {
-      map[key] = {
-        skuMaster: item.skuMaster || null,
-        skuName: item.skuName || null,
-        itemCode: rawCode,
-        description: item.description || '',
-        totalQty: 0,
-        warnings: [],
-        rate: Number(item.unitRate) || 0,
-        mrp: Number(item.mrp) || 0,
-      };
-    }
-
-    map[key].totalQty += quantity;
-
-    if (item.unitRate) {
-      map[key].rate = Number(item.unitRate);
-    }
-
-    if (item.mrp) {
-      map[key].mrp = Number(item.mrp);
-    }
-
-    if (item.warning) {
-      map[key].warnings.push(item.warning);
-    }
-  }
-
-  console.log(
-    `AGGREGATED ${qtyField}:`,
-    JSON.stringify(map, null, 2)
-  );
-
-  return map;
 }
 
 // Check if a value is a "hard violation" reason code
@@ -213,47 +100,10 @@ async function getMatch(poNumber) {
     reasons.push('invoice_date_after_po_date');
   }
 
-  // Resolve all items
-//   const poItems = primaryPO
-//   ? await resolveDocumentItems(primaryPO.items)
-//   : [];
-
-// console.log(
-//   "========== ORIGINAL PO ITEMS =========="
-// );
-
-// console.log(
-//   JSON.stringify(
-//     poItems.map(item => ({
-//       itemCode: item.itemCode,
-//       description: item.description,
-//       quantity: item.quantity,
-//       skuMaster: item.skuMaster,
-//       skuName: item.skuName,
-//     })),
-//     null,
-//     2
-//   )
-// );
-
-// console.log(
-//   "========================================"
-// );
-//   const allGrnItems = [];
-//   for (const grn of grns) {
-//     const resolved = await resolveDocumentItems(grn.items);
-//     allGrnItems.push(...resolved);
-//   }
-//   const allInvoiceItems = [];
-//   for (const inv of invoices) {
-//     const resolved = await resolveDocumentItems(inv.items);
-//     allInvoiceItems.push(...resolved);
-//   }
-
-// Resolve and permanently save PO SKU mappings
-const poItems = primaryPO
-  ? await resolveAndSaveDocumentItems(primaryPO)
-  : [];
+  // Resolve and permanently save PO SKU mappings
+  const poItems = primaryPO
+    ? await resolveAndSaveDocumentItems(primaryPO)
+    : [];
 
 // Resolve and permanently save GRN SKU mappings
 const allGrnItems = [];
@@ -270,117 +120,149 @@ for (const inv of invoices) {
   const resolved = await resolveAndSaveDocumentItems(inv);
   allInvoiceItems.push(...resolved);
 }
-  // Aggregate by SKU
-  const poAgg = aggregateBySku(poItems, 'quantity');
-  const grnAgg = aggregateBySku(allGrnItems, 'receivedQuantity');
-  const invoiceAgg = aggregateBySku(allInvoiceItems, 'quantity');
 
-console.log("PO AGG KEYS:", Object.keys(poAgg));
-console.log("PO AGG:", JSON.stringify(poAgg, null, 2));
-console.log("GRN AGG KEYS:", Object.keys(grnAgg));
-console.log("INVOICE AGG KEYS:", Object.keys(invoiceAgg));
-
-  // Build combined key set from all sources
-  const allKeys = new Set([...Object.keys(poAgg), ...Object.keys(grnAgg), ...Object.keys(invoiceAgg)]);
-
-  // Load SKU masters for price comparison
-  const skuIds = [...allKeys]
-    .filter(k => !k.startsWith('raw:'))
-    .map(k => {
-      const item = poAgg[k] || grnAgg[k] || invoiceAgg[k];
-      return item?.skuMaster;
-    })
-    .filter(Boolean);
-
-  const skuMap = {};
-  if (skuIds.length > 0) {
-    const skus = await SkuMaster.find({ _id: { $in: skuIds } });
-    skus.forEach(s => { skuMap[String(s._id)] = s; });
+  // --- Invoice-centric fulfillment matching ---
+  // PO items are keyed by their itemCode (ERP code)
+  const poItemsByCode = {};
+  for (const item of poItems) {
+    const code = String(item.itemCode || '').trim().toLowerCase();
+    if (code) {
+      if (!poItemsByCode[code]) {
+        poItemsByCode[code] = { totalQty: 0, skuMaster: item.skuMaster || null, skuName: item.skuName || null, itemCode: item.itemCode };
+      }
+      poItemsByCode[code].totalQty += Number(item.quantity) || 0;
+    }
   }
 
-  // Per-item matching
+  // GRN items keyed by SKU ID or raw code
+  const grnBySku = {};
+  for (const item of allGrnItems) {
+    const key = item.skuMaster ? String(item.skuMaster) : `raw:${String(item.itemCode || '').trim().toLowerCase()}`;
+    if (!grnBySku[key]) {
+      grnBySku[key] = { totalQty: 0, mrp: 0 };
+    }
+    grnBySku[key].totalQty += Number(item.receivedQuantity) || 0;
+    if (item.mrp) grnBySku[key].mrp = Number(item.mrp);
+  }
+
+  // Build items from ALL invoice items (primary source)
   const items = [];
+  const seenSkus = new Set();
 
-  for (const key of allKeys) {
-    const po = poAgg[key] || null;
-    const grn = grnAgg[key] || null;
-    const invoice = invoiceAgg[key] || null;
+  for (const invItem of allInvoiceItems) {
+    const invCode = String(invItem.itemCode || '').trim();
+    const invCodeLower = invCode.toLowerCase();
+    const quantity = Number(invItem.quantity) || 0;
+    const rate = Number(invItem.unitRate) || 0;
+    const mrp = Number(invItem.mrp) || 0;
 
-    const skuId = key.startsWith('raw:') ? null : key;
-    const sku = skuId ? skuMap[skuId] : null;
-    
+    // Look up SKU via eanCode (invoice item code = EAN code)
+    const sku = invItem.skuMaster || null;
+    const skuId = sku ? String(sku._id) : null;
 
-    const poQty = po ? (po.totalQty || 0) : 0;
-    const grnQty = grn ? (grn.totalQty || 0) : 0;
-    const invoiceQty = invoice ? (invoice.totalQty || 0) : 0;
-    
+    // Check if this SKU's skuErpCode exists in PO
+    let poMatch = null;
+    if (sku && sku.skuErpCode) {
+      const erpCode = String(sku.skuErpCode).trim().toLowerCase();
+      poMatch = poItemsByCode[erpCode] || null;
+    }
+    // Also try direct code match (fallback)
+    if (!poMatch) {
+      poMatch = poItemsByCode[invCodeLower] || null;
+    }
 
+    const poQty = poMatch ? poMatch.totalQty : 0;
+    const agreedRate = sku?.agreedRate || 0;
+
+    // GRN data
+    const grnKey = skuId || `raw:${invCodeLower}`;
+    const grnData = grnBySku[grnKey] || null;
+    const grnQty = grnData ? grnData.totalQty : 0;
+
+    // Build reasons
     const itemReasons = [];
-
-    // Item missing in PO
-    if ((grn || invoice) && !po) {
+    if (!poMatch) {
       itemReasons.push('item_missing_in_po');
-    }
-
-    // Collect warnings from resolved items
-    if (po?.warnings) itemReasons.push(...po.warnings.filter(w => w === 'unmapped_master_sku'));
-    if (grn?.warnings) itemReasons.push(...grn.warnings.filter(w => w === 'unmapped_master_sku'));
-    if (invoice?.warnings) itemReasons.push(...invoice.warnings.filter(w => w === 'unmapped_master_sku'));
-
-    // Quantity checks (only if PO exists)
-    if (po) {
-      if (grnQty > poQty) itemReasons.push('grn_qty_exceeds_po_qty');
-      if (invoiceQty > poQty) itemReasons.push('invoice_qty_exceeds_po_qty');
-    }
-
-    // GRN exists but invoice exceeds GRN
-    if (grn && invoiceQty > grnQty) {
-      itemReasons.push('invoice_qty_exceeds_grn_qty');
-    }
-
-    // Price mismatch - compare invoice rate vs SKU agreed rate
-    if (sku && invoice?.rate && sku.agreedRate > 0) {
-      const tolerance = sku.priceTolerance || 0.05;
-      const upper = sku.agreedRate * (1 + tolerance);
-      const lower = sku.agreedRate * (1 - tolerance);
-      if (invoice.rate > upper || invoice.rate < lower) {
-        itemReasons.push('price_mismatch');
+    } else {
+      if (quantity > poQty) itemReasons.push('invoice_qty_exceeds_po_qty');
+      if (sku && rate > 0 && agreedRate > 0) {
+        const tolerance = sku.priceTolerance || 0.05;
+        const upper = agreedRate * (1 + tolerance);
+        const lower = agreedRate * (1 - tolerance);
+        if (rate > upper || rate < lower) itemReasons.push('price_mismatch');
       }
-    }
-
-    // MRP mismatch - compare invoice MRP vs SKU MRP
-    if (sku) {
-      if (invoice?.mrp && sku.mrp > 0) {
-        const mrpTolerance = 0.01; // ~1%
-        const upperMrp = sku.mrp * (1 + mrpTolerance);
-        const lowerMrp = sku.mrp * (1 - mrpTolerance);
-        if (invoice.mrp > upperMrp || invoice.mrp < lowerMrp) {
-          itemReasons.push('mrp_mismatch');
-        }
-      }
-      if (grn?.mrp && sku.mrp > 0) {
+      if (sku && mrp > 0 && sku.mrp > 0) {
         const mrpTolerance = 0.01;
-        const upperMrp = sku.mrp * (1 + mrpTolerance);
-        const lowerMrp = sku.mrp * (1 - mrpTolerance);
-        if (grn.mrp > upperMrp || grn.mrp < lowerMrp) {
+        if (mrp > sku.mrp * (1 + mrpTolerance) || mrp < sku.mrp * (1 - mrpTolerance)) {
           itemReasons.push('mrp_mismatch');
         }
       }
     }
+    if (grnQty > 0 && quantity > grnQty) itemReasons.push('invoice_qty_exceeds_grn_qty');
+    if (grnQty > poQty && poQty > 0) itemReasons.push('grn_qty_exceeds_po_qty');
 
-    reasons.push(...itemReasons);
+    // Track unique SKU (aggregate quantities if same SKU appears multiple times)
+    const dedupeKey = skuId || `raw:${invCodeLower}`;
+    if (seenSkus.has(dedupeKey)) {
+      // Aggregate into existing item
+      const existing = items.find(i => {
+        const iKey = i.skuId || `raw:${(i.erpCode || '').toLowerCase()}`;
+        return iKey === dedupeKey;
+      });
+      if (existing) {
+        existing.invoiceQty += quantity;
+        if (rate) existing.invoiceRate = rate;
+        if (mrp) existing.invoiceMrp = mrp;
+        existing.reasons = [...new Set([...existing.reasons, ...itemReasons])];
+      }
+      continue;
+    }
+    seenSkus.add(dedupeKey);
 
     items.push({
       skuId,
-      skuName: sku?.name || po?.skuName || grn?.skuName || invoice?.skuName || null,
-      erpCode: po?.itemCode || grn?.itemCode || invoice?.itemCode || '',
+      skuName: sku?.name || invItem.skuName || null,
+      erpCode: sku?.skuErpCode || poMatch?.itemCode || invCode,
+      eanCode: sku?.eanCode || invCode,
       poQty,
       grnQty,
-      invoiceQty,
-      agreedRate: sku?.agreedRate || 0,
-      invoiceRate: invoice?.rate || 0,
+      invoiceQty: quantity,
+      agreedRate,
+      invoiceRate: rate,
+      invoiceMrp: mrp,
       mrp: sku?.mrp || 0,
+      inPO: !!poMatch,
       reasons: [...new Set(itemReasons)],
+    });
+
+    reasons.push(...itemReasons);
+  }
+
+  // Add PO-only items (in PO but not in any invoice)
+  for (const [erpCode, poData] of Object.entries(poItemsByCode)) {
+    const sku = poData.skuMaster || null;
+    const skuId = sku ? String(sku._id) : null;
+    const dedupeKey = skuId || `raw:${erpCode}`;
+    if (seenSkus.has(dedupeKey)) continue;
+    seenSkus.add(dedupeKey);
+
+    const grnKey = skuId || `raw:${erpCode}`;
+    const grnData = grnBySku[grnKey] || null;
+
+    items.push({
+      skuId,
+      skuName: poData.skuName || sku?.name || null,
+      erpCode: poData.itemCode || erpCode,
+      eanCode: sku?.eanCode || '',
+      poQty: poData.totalQty,
+      grnQty: grnData ? grnData.totalQty : 0,
+      invoiceQty: 0,
+      agreedRate: sku?.agreedRate || 0,
+      invoiceRate: 0,
+      invoiceMrp: 0,
+      mrp: sku?.mrp || 0,
+      inPO: true,
+      reasons: [],
     });
   }
 

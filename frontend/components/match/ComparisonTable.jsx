@@ -20,6 +20,7 @@ export default function ComparisonTable({ items = [] }) {
     if (Number(invoice) !== Number(agreed)) return 'bg-red-50 dark:bg-red-950 text-red-700 dark:text-red-300 font-semibold';
     return '';
   }
+  console.log(items);
 
   return (
     <div className="overflow-x-auto">
@@ -51,7 +52,7 @@ export default function ComparisonTable({ items = [] }) {
                     <span className="font-medium">{item.skuName}</span>
                   ) : (
                     <span className="text-amber-600 dark:text-amber-400 flex items-center gap-1">
-                      <span>⚠</span> Unmapped SKU
+                      <span>⚠</span> Unmapped SKU 
                     </span>
                   )}
                 </td>

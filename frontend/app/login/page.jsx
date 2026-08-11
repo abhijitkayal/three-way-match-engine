@@ -229,7 +229,7 @@ export default function LoginPage() {
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary-600 shadow-lg shadow-primary-600/30">
             <ShieldCheck size={20} />
           </div>
-          <span className="text-lg font-semibold tracking-tight">Finify Match</span>
+          <span className="text-lg font-semibold tracking-tight">Finifi Match</span>
         </div>
 
         <div className="relative z-10 max-w-md animate-fade-in-up" style={{ animationDelay: '80ms' }}>
@@ -255,7 +255,7 @@ export default function LoginPage() {
         </div>
 
         <p className="relative z-10 text-xs text-zinc-600 animate-fade-in" style={{ animationDelay: '300ms' }}>
-          © {new Date().getFullYear()} Finify. All rights reserved.
+          © {new Date().getFullYear()} Finifi. All rights reserved.
         </p>
       </div>
 
@@ -306,7 +306,7 @@ export default function LoginPage() {
             <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-primary-600 text-white shadow-lg shadow-primary-600/20">
               <ShieldCheck size={24} />
             </div>
-            <h1 className="text-xl font-bold">Finify Match</h1>
+            <h1 className="text-xl font-bold">Finifi Match</h1>
             <p className="mt-1 text-sm text-muted-foreground">Three-Way Match Engine</p>
           </div>
 

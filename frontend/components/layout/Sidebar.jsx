@@ -38,7 +38,7 @@ export default function Sidebar() {
             <div className="w-8 h-8 rounded-lg bg-primary-600 flex items-center justify-center">
               <span className="text-white font-bold text-sm">F</span>
             </div>
-            <span className="font-semibold text-lg">Finify</span>
+            <span className="font-semibold text-lg">Finifi</span>
           </div>
         )}
         <button

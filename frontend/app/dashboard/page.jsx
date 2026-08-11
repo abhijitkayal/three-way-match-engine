@@ -88,11 +88,11 @@ export default function DashboardPage() {
                     </div>
                   </div>
 
-                  <div className="lg:col-span-2">
+                  {/* <div className="lg:col-span-2">
                     <div className="bg-card rounded-lg shadow-sm border p-8 text-center text-muted-foreground">
                       Select a PO to view match details
                     </div>
-                  </div>
+                  </div> */}
                 </div>
               )}
             </div>

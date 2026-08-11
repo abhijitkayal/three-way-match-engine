@@ -25,7 +25,7 @@ export default function Navbar() {
       <div className="max-w-7xl mx-auto px-4 flex items-center justify-between h-14">
         <div className="flex items-center gap-6">
           <Link href="/dashboard" className="font-bold text-lg">
-            Finify Match
+            Finifi Match
           </Link>
           {links.map((link) => (
             <Link

@@ -1,9 +1,7 @@
 ﻿'use client';
 
 import { useMemo } from 'react';
-import {
-  FileText, TrendingUp, Receipt, Package, Truck, AlertCircle,
-} from 'lucide-react';
+import { FileText, TrendingUp, Receipt, Package, Truck, AlertCircle, CheckCircle } from 'lucide-react';
 import StatusBadge from '../match/StatusBadge';
 import { formatCurrency, formatQty, formatDate, formatReason } from '../../lib/constants';
 
@@ -13,6 +11,7 @@ function StatusPill({ status }) {
     PARTIAL: { bg: 'bg-amber-50 dark:bg-amber-950', text: 'text-amber-700 dark:text-amber-300', border: 'border-amber-200 dark:border-amber-800' },
     MISMATCH: { bg: 'bg-red-50 dark:bg-red-950', text: 'text-red-700 dark:text-red-300', border: 'border-red-200 dark:border-red-800' },
     PENDING: { bg: 'bg-zinc-100 dark:bg-zinc-800', text: 'text-zinc-600 dark:text-zinc-400', border: 'border-zinc-200 dark:border-zinc-700' },
+    'NOT AVAILABLE': { bg: 'bg-zinc-100 dark:bg-zinc-800', text: 'text-zinc-600 dark:text-zinc-400', border: 'border-zinc-200 dark:border-zinc-700' },
   };
   const c = config[status] || config.PENDING;
   return (
@@ -34,6 +33,7 @@ function SeverityBadge({ severity }) {
     </span>
   );
 }
+
 export default function SummaryTab({ summary, matchData }) {
   const data = useMemo(() => {
     if (!summary || !matchData) return null;
@@ -51,8 +51,8 @@ export default function SummaryTab({ summary, matchData }) {
     const totalReceivedQty = items.reduce((s, i) => s + (i.grnQty || 0), 0);
     const totalInvoiceQty = items.reduce((s, i) => s + (i.invoiceQty || 0), 0);
 
-    const poAmount = summary.poAmount ?? 0;
-    const invoiceAmount = summary.totalInvoiced ?? 0;
+    const poAmount = items.reduce((s, i) => s + ((i.poQty || 0) * (i.agreedRate || 0)), 0);
+    const invoiceAmount = items.reduce((s, i) => s + ((i.invoiceQty || 0) * (i.invoiceRate || 0)), 0);
 
     const pendingQty = Math.max(0, totalPoQty - totalReceivedQty);
     const fulfillmentPct = totalPoQty > 0 ? ((totalReceivedQty / totalPoQty) * 100) : 0;
@@ -138,6 +138,15 @@ export default function SummaryTab({ summary, matchData }) {
             severity: 'HIGH',
           });
         }
+        if (r === 'mrp_mismatch') {
+          issues.push({
+            issue: 'MRP mismatch between documents',
+            document: item.skuName || item.erpCode,
+            expected: formatCurrency(item.mrp),
+            actual: '-',
+            severity: 'LOW',
+          });
+        }
       });
     });
 
@@ -173,20 +182,20 @@ export default function SummaryTab({ summary, matchData }) {
     const skuMatches = items.map((item) => {
       const poVsGrn = (() => {
         if (!hasGRN) return 'NOT AVAILABLE';
-        if (item.poQty === item.grnQty) return 'MATCH';
+        if (item.poQty === item.grnQty && item.grnQty > 0) return 'MATCH';
         if (item.grnQty === 0) return 'PENDING';
         return 'PARTIAL';
       })();
       const poVsInvoice = (() => {
         if (!hasInvoice) return 'NOT AVAILABLE';
-        if (item.poQty === item.invoiceQty && item.agreedRate === item.invoiceRate) return 'MATCH';
         if (item.invoiceQty === 0) return 'PENDING';
-        if (item.invoiceQty > item.poQty) return 'MISMATCH';
-        if (item.agreedRate !== item.invoiceRate) return 'MISMATCH';
-        return 'PARTIAL';
+        if (item.poQty !== item.invoiceQty) return 'MISMATCH';
+        if (item.agreedRate !== item.invoiceRate && item.agreedRate > 0) return 'MISMATCH';
+        return 'MATCH';
       })();
       const grnVsInvoice = (() => {
         if (!hasGRN || !hasInvoice) return 'NOT AVAILABLE';
+        if (item.invoiceQty === 0 || item.grnQty === 0) return 'PENDING';
         if (item.grnQty === item.invoiceQty) return 'MATCH';
         return 'MISMATCH';
       })();
@@ -210,6 +219,96 @@ export default function SummaryTab({ summary, matchData }) {
       };
     });
 
+    // Build timeline rows for Associated Invoice & GRN table
+    const timelineRows = [];
+    let cumulativeInvoice = 0;
+    let cumulativeGRN = 0;
+
+    // Row 1: Original PO
+    if (hasPO) {
+      timelineRows.push({
+        type: 'Original PO',
+        docNo: po.poNumber || '-',
+        date: po.poDate || null,
+        quantity: totalPoQty,
+        cumulativeInvoice: 0,
+        cumulativeGRN: 0,
+        pendingDelivery: totalPoQty,
+        badgeStyle: 'bg-primary-50 dark:bg-primary-950 text-primary-700 dark:text-primary-300',
+      });
+    }
+
+    // Sort invoices by date
+    const sortedInvoices = [...invoices].sort((a, b) => {
+      const da = a.invoiceDate ? new Date(a.invoiceDate).getTime() : 0;
+      const db = b.invoiceDate ? new Date(b.invoiceDate).getTime() : 0;
+      return da - db;
+    });
+
+    // Sort GRNs by date
+    const sortedGRNs = [...grns].sort((a, b) => {
+      const da = a.grnDate ? new Date(a.grnDate).getTime() : 0;
+      const db = b.grnDate ? new Date(b.grnDate).getTime() : 0;
+      return da - db;
+    });
+
+    // Interleave invoices and GRNs chronologically
+    const allDocs = [
+      ...sortedInvoices.map(inv => ({ docType: 'invoice', data: inv })),
+      ...sortedGRNs.map(grn => ({ docType: 'grn', data: grn })),
+    ].sort((a, b) => {
+      const dateA = a.docType === 'invoice' ? a.data.invoiceDate : a.data.grnDate;
+      const dateB = b.docType === 'invoice' ? b.data.invoiceDate : b.data.grnDate;
+      const ta = dateA ? new Date(dateA).getTime() : 0;
+      const tb = dateB ? new Date(dateB).getTime() : 0;
+      return ta - tb;
+    });
+
+    for (const doc of allDocs) {
+      if (doc.docType === 'invoice') {
+        const inv = doc.data;
+        const invQty = (inv.items || []).reduce((s, i) => s + (i.quantity || 0), 0);
+        cumulativeInvoice += invQty;
+        timelineRows.push({
+          type: 'Invoice',
+          docNo: inv.invoiceNumber || '-',
+          date: inv.invoiceDate || null,
+          quantity: invQty,
+          cumulativeInvoice,
+          cumulativeGRN,
+          pendingDelivery: Math.max(0, totalPoQty - cumulativeGRN),
+          badgeStyle: 'bg-amber-50 dark:bg-amber-950 text-amber-700 dark:text-amber-300',
+        });
+      } else {
+        const grn = doc.data;
+        const grnQty = (grn.items || []).reduce((s, i) => s + (i.receivedQuantity || 0), 0);
+        cumulativeGRN += grnQty;
+        timelineRows.push({
+          type: 'GRN',
+          docNo: grn.grnNumber || '-',
+          date: grn.grnDate || null,
+          quantity: grnQty,
+          cumulativeInvoice,
+          cumulativeGRN,
+          pendingDelivery: Math.max(0, totalPoQty - cumulativeGRN),
+          badgeStyle: 'bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300',
+        });
+      }
+    }
+
+    // Final row: Current Status
+    timelineRows.push({
+      type: 'Current Status',
+      docNo: '-',
+      date: null,
+      quantity: null,
+      remainingQty: Math.max(0, totalPoQty - cumulativeGRN),
+      cumulativeInvoice,
+      cumulativeGRN,
+      pendingDelivery: Math.max(0, totalPoQty - cumulativeGRN),
+      isStatusRow: true,
+    });
+
     return {
       po, grns, invoices, items,
       totalPoQty, totalReceivedQty, totalInvoiceQty,
@@ -219,10 +318,12 @@ export default function SummaryTab({ summary, matchData }) {
       issues: uniqueIssues,
       skuMatches,
       hasPO, hasGRN, hasInvoice,
+      timelineRows,
     };
   }, [summary, matchData]);
 
   if (!data) return null;
+
   return (
     <div className="space-y-6">
 
@@ -264,7 +365,7 @@ export default function SummaryTab({ summary, matchData }) {
           </div>
           <div>
             <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">PO Amount</p>
-            <p className="text-xl font-bold mt-0.5">{formatCurrency(data.poAmount)}</p>
+            <p className="text-xl font-bold mt-0.5">{data.hasPO ? formatCurrency(data.poAmount) : 'N/A'}</p>
           </div>
         </div>
 
@@ -274,7 +375,7 @@ export default function SummaryTab({ summary, matchData }) {
           </div>
           <div>
             <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Invoice Amount</p>
-            <p className="text-xl font-bold mt-0.5">{formatCurrency(data.invoiceAmount)}</p>
+            <p className="text-xl font-bold mt-0.5">{data.hasInvoice ? formatCurrency(data.invoiceAmount) : 'N/A'}</p>
           </div>
         </div>
 
@@ -342,74 +443,93 @@ export default function SummaryTab({ summary, matchData }) {
           </div>
         )}
       </div>
-      {/* SECTION 4: ASSOCIATED DOCUMENTS */}
+
+      {/* SECTION 4: ASSOCIATED INVOICE & GRN */}
       <div className="bg-card rounded-lg border">
         <div className="px-4 py-3 border-b border-border">
-          <h3 className="text-sm font-semibold">Associated Documents</h3>
+          <h3 className="text-sm font-semibold">Associated Invoice & GRN</h3>
         </div>
         <div className="overflow-x-auto">
           <table className="min-w-full text-xs">
             <thead>
               <tr className="bg-muted/50">
-                <th className="text-left px-4 py-2.5 font-medium text-muted-foreground border-b">Document Number</th>
-                <th className="text-left px-4 py-2.5 font-medium text-muted-foreground border-b">Type</th>
-                <th className="text-left px-4 py-2.5 font-medium text-muted-foreground border-b">Date</th>
-                <th className="text-right px-4 py-2.5 font-medium text-muted-foreground border-b">Invoiced Qty</th>
-                <th className="text-right px-4 py-2.5 font-medium text-muted-foreground border-b">Received Qty</th>
-                <th className="text-right px-4 py-2.5 font-medium text-muted-foreground border-b">Amount</th>
-                <th className="text-center px-4 py-2.5 font-medium text-muted-foreground border-b">Status</th>
+                <th className="text-left px-3 py-2.5 font-semibold uppercase tracking-wider text-muted-foreground border-b border-r border-border">Document Type</th>
+                <th className="text-left px-3 py-2.5 font-semibold uppercase tracking-wider text-muted-foreground border-b border-r border-border">Document No.</th>
+                <th className="text-left px-3 py-2.5 font-semibold uppercase tracking-wider text-muted-foreground border-b border-r border-border">Date</th>
+                <th className="text-right px-3 py-2.5 font-semibold uppercase tracking-wider text-muted-foreground border-b border-r border-border">Quantity</th>
+                <th className="text-right px-3 py-2.5 font-semibold uppercase tracking-wider text-muted-foreground border-b border-r border-border">Cumulative Invoice</th>
+                <th className="text-right px-3 py-2.5 font-semibold uppercase tracking-wider text-muted-foreground border-b border-r border-border">Cumulative GRN</th>
+                <th className="text-right px-3 py-2.5 font-semibold uppercase tracking-wider text-muted-foreground border-b border-border">Pending Delivery</th>
               </tr>
             </thead>
             <tbody>
-              {!data.hasGRN && !data.hasInvoice ? (
+              {data.timelineRows.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="px-4 py-6 text-center text-muted-foreground text-sm">
-                    No associated documents found.
+                    No documents found.
                   </td>
                 </tr>
               ) : (
-                <>
-                  {data.grns.map((grn, idx) => {
-                    const grnTotalReceived = (grn.items || []).reduce((s, i) => s + (i.receivedQuantity || 0), 0);
-                    const docStatus = data.overallStatus === 'MATCHED' ? 'MATCH' : data.overallStatus === 'MISMATCH' ? 'MISMATCH' : 'PARTIAL';
+                data.timelineRows.map((row, idx) => {
+                  if (row.isStatusRow) {
                     return (
-                      <tr key={`grn-${grn._id || idx}`} className="hover:bg-muted/50">
-                        <td className="px-4 py-2.5 border-b font-medium">{grn.grnNumber}</td>
-                        <td className="px-4 py-2.5 border-b">
-                          <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300">GRN</span>
+                      <tr key={`status-${idx}`} className="bg-primary-50/50 dark:bg-primary-950/50 font-semibold">
+                        <td className="px-3 py-2.5 border-b border-r border-border">
+                          <span className="text-xs font-bold text-primary-700 dark:text-primary-300">Current Status</span>
                         </td>
-                        <td className="px-4 py-2.5 border-b text-muted-foreground">{formatDate(grn.grnDate)}</td>
-                        <td className="px-4 py-2.5 border-b text-right text-muted-foreground">-</td>
-                        <td className="px-4 py-2.5 border-b text-right font-medium">{formatQty(grnTotalReceived)}</td>
-                        <td className="px-4 py-2.5 border-b text-right text-muted-foreground">-</td>
-                        <td className="px-4 py-2.5 border-b text-center"><StatusPill status={docStatus} /></td>
+                        <td className="px-3 py-2.5 border-b border-r border-border text-muted-foreground">-</td>
+                        <td className="px-3 py-2.5 border-b border-r border-border text-muted-foreground">-</td>
+                        <td className="px-3 py-2.5 border-b border-r border-border text-right">
+                          <span className="text-primary-700 dark:text-primary-300">Remaining: {formatQty(row.remainingQty)}</span>
+                        </td>
+                        <td className="px-3 py-2.5 border-b border-r border-border text-right">
+                          <span className="font-bold">{formatQty(row.cumulativeInvoice)}</span>
+                        </td>
+                        <td className="px-3 py-2.5 border-b border-r border-border text-right">
+                          <span className="font-bold">{formatQty(row.cumulativeGRN)}</span>
+                        </td>
+                        <td className="px-3 py-2.5 border-b border-border text-right">
+                          <span className={`font-bold ${row.pendingDelivery > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
+                            {formatQty(row.pendingDelivery)}
+                          </span>
+                        </td>
                       </tr>
                     );
-                  })}
-                  {data.invoices.map((inv, idx) => {
-                    const invTotalQty = (inv.items || []).reduce((s, i) => s + (i.quantity || 0), 0);
-                    const invTotalAmount = (inv.items || []).reduce((s, i) => s + ((i.quantity || 0) * (i.unitRate || 0)), 0);
-                    const docStatus = data.overallStatus === 'MATCHED' ? 'MATCH' : data.overallStatus === 'MISMATCH' ? 'MISMATCH' : 'PARTIAL';
-                    return (
-                      <tr key={`inv-${inv._id || idx}`} className="hover:bg-muted/50">
-                        <td className="px-4 py-2.5 border-b font-medium">{inv.invoiceNumber}</td>
-                        <td className="px-4 py-2.5 border-b">
-                          <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-amber-50 dark:bg-amber-950 text-amber-700 dark:text-amber-300">Invoice</span>
-                        </td>
-                        <td className="px-4 py-2.5 border-b text-muted-foreground">{formatDate(inv.invoiceDate)}</td>
-                        <td className="px-4 py-2.5 border-b text-right font-medium">{formatQty(invTotalQty)}</td>
-                        <td className="px-4 py-2.5 border-b text-right text-muted-foreground">-</td>
-                        <td className="px-4 py-2.5 border-b text-right font-medium">{formatCurrency(invTotalAmount)}</td>
-                        <td className="px-4 py-2.5 border-b text-center"><StatusPill status={docStatus} /></td>
-                      </tr>
-                    );
-                  })}
-                </>
+                  }
+                  return (
+                    <tr key={`${row.type}-${idx}`} className="hover:bg-muted/50 transition-colors">
+                      <td className="px-3 py-2.5 border-b border-r border-border">
+                        <span className={`inline-block text-[10px] font-semibold px-2 py-0.5 rounded-full ${row.badgeStyle}`}>
+                          {row.type}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2.5 border-b border-r border-border font-medium">{row.docNo}</td>
+                      <td className="px-3 py-2.5 border-b border-r border-border text-muted-foreground">{formatDate(row.date)}</td>
+                      <td className="px-3 py-2.5 border-b border-r border-border text-right tabular-nums">{formatQty(row.quantity)}</td>
+                      <td className="px-3 py-2.5 border-b border-r border-border text-right tabular-nums">
+                        <span className={row.cumulativeInvoice > 0 ? 'font-medium' : 'text-muted-foreground'}>
+                          {formatQty(row.cumulativeInvoice)}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2.5 border-b border-r border-border text-right tabular-nums">
+                        <span className={row.cumulativeGRN > 0 ? 'font-medium' : 'text-muted-foreground'}>
+                          {formatQty(row.cumulativeGRN)}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2.5 border-b border-border text-right tabular-nums">
+                        <span className={row.pendingDelivery > 0 ? 'font-medium text-amber-600 dark:text-amber-400' : 'font-medium text-emerald-600 dark:text-emerald-400'}>
+                          {formatQty(row.pendingDelivery)}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
         </div>
       </div>
+
       {/* SECTION 5: THREE-WAY MATCH RESULT */}
       <div className="bg-card rounded-lg border p-5">
         <h3 className="text-sm font-semibold mb-4">Three-Way Match</h3>
@@ -443,7 +563,7 @@ export default function SummaryTab({ summary, matchData }) {
                   status={data.totalReceivedQty === data.totalPoQty ? 'MATCH' : data.totalReceivedQty > 0 ? 'PARTIAL' : 'PENDING'}
                 />
               ) : (
-                <StatusPill status="PENDING" />
+                <StatusPill status="NOT AVAILABLE" />
               )}
             </div>
           </div>
@@ -465,7 +585,7 @@ export default function SummaryTab({ summary, matchData }) {
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Price</span>
                 <span className="font-medium">
-                  {data.hasInvoice
+                  {data.hasInvoice && data.skuMatches.length > 0
                     ? `${formatCurrency(data.skuMatches[0]?.invoiceRate || 0)} / ${formatCurrency(data.skuMatches[0]?.agreedRate || 0)}`
                     : 'N/A'}
                 </span>
@@ -481,7 +601,7 @@ export default function SummaryTab({ summary, matchData }) {
                   }
                 />
               ) : (
-                <StatusPill status="PENDING" />
+                <StatusPill status="NOT AVAILABLE" />
               )}
             </div>
           </div>
@@ -520,14 +640,15 @@ export default function SummaryTab({ summary, matchData }) {
                   }
                 />
               ) : (
-                <StatusPill status="PENDING" />
+                <StatusPill status="NOT AVAILABLE" />
               )}
             </div>
           </div>
         </div>
       </div>
+
       {/* SECTION 6: SKU-LEVEL MATCHING */}
-      <div className="bg-card rounded-lg border">
+      {/* <div className="bg-card rounded-lg border">
         <div className="px-4 py-3 border-b border-border">
           <h3 className="text-sm font-semibold">SKU-Level Matching</h3>
         </div>
@@ -601,14 +722,16 @@ export default function SummaryTab({ summary, matchData }) {
                         {item.mrp ? formatCurrency(item.mrp) : '-'}
                       </td>
                       <td className="px-3 py-2 border-b border-r border-border text-right">
-                        <span className={item.qtyVariancePoGrn > 0 ? 'text-amber-600 dark:text-amber-400' : ''}>
-                          {item.qtyVariancePoGrn}
-                        </span>
+                        {data.hasGRN ? (
+                          <span className={item.qtyVariancePoGrn > 0 ? 'text-amber-600 dark:text-amber-400' : item.qtyVariancePoGrn < 0 ? 'text-red-600 dark:text-red-400' : ''}>
+                            {item.qtyVariancePoGrn > 0 ? `+${item.qtyVariancePoGrn}` : item.qtyVariancePoGrn}
+                          </span>
+                        ) : '-'}
                       </td>
                       <td className="px-3 py-2 border-b border-r border-border text-right">
-                        {item.invoiceRate > 0 ? (
+                        {item.invoiceRate > 0 && item.agreedRate > 0 ? (
                           <span className={Math.abs(item.priceVariancePct) > 5 ? 'text-amber-600 dark:text-amber-400' : ''}>
-                            {item.priceVariancePct.toFixed(1)}%
+                            {item.priceVariancePct > 0 ? '+' : ''}{item.priceVariancePct.toFixed(1)}%
                           </span>
                         ) : '-'}
                       </td>
@@ -624,9 +747,10 @@ export default function SummaryTab({ summary, matchData }) {
             </tbody>
           </table>
         </div>
-      </div>
+      </div> */}
+
       {/* SECTION 8: ISSUES DETECTED */}
-      {data.issues.length > 0 && (
+      {/* {data.issues.length > 0 && (
         <div className="bg-card rounded-lg border">
           <div className="px-4 py-3 border-b border-border">
             <h3 className="text-sm font-semibold">Issues Detected</h3>
@@ -656,12 +780,13 @@ export default function SummaryTab({ summary, matchData }) {
             </table>
           </div>
         </div>
-      )}
+      )} */}
 
       {/* Empty state when no issues */}
       {data.issues.length === 0 && (
         <div className="bg-card rounded-lg border p-5">
           <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400">
+            <CheckCircle size={16} />
             <span className="text-sm font-semibold">No issues detected</span>
           </div>
         </div>

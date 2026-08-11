@@ -41,9 +41,15 @@ export default function DocumentsPage() {
                 <div className="bg-card rounded-lg border p-4">
                   <div className="flex items-center justify-between mb-3">
                     <h3 className="text-sm font-semibold">
-                      {selectedDoc.documentType?.toUpperCase()} -{' '}
-                      {selectedDoc.poNumber || selectedDoc.grnNumber || selectedDoc.invoiceNumber}
-                    </h3>
+  {selectedDoc.documentType === "po" &&
+    `PO - ${selectedDoc.poNumber}`}
+
+  {selectedDoc.documentType === "grn" &&
+    `GRN - ${selectedDoc.grnNumber}`}
+
+  {selectedDoc.documentType === "invoice" &&
+    `INV - ${selectedDoc.invoiceNumber}`}
+</h3>
                     <span
                       className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${
                         selectedDoc.documentType === 'po'

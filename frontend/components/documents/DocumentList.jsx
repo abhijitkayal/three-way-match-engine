@@ -87,9 +87,15 @@ export default function DocumentList({ onSelect, selectedId, refreshKey }) {
               }`}
             >
               <div className="flex items-center justify-between">
-                <span className="text-sm font-medium">
-                  {doc.poNumber || doc.grnNumber || doc.invoiceNumber || 'Unknown'}
-                </span>
+                 <span className="text-sm font-medium">
+    {doc.documentType === "po"
+      ? doc.poNumber
+      : doc.documentType === "grn"
+      ? doc.grnNumber
+      : doc.documentType === "invoice"
+      ? doc.invoiceNumber
+      : "Unknown"}
+  </span>
                 <span
                   className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${
                     doc.documentType === 'po'
