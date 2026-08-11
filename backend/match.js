@@ -42,6 +42,23 @@ async function resolveAndSaveDocumentItems(document, codeField = 'itemCode') {
   return document.items;
 }
 
+// Same as above but does NOT save the document (read-only resolution)
+async function resolveDocumentItems(document, codeField = 'itemCode') {
+  if (!document || !Array.isArray(document.items)) {
+    return [];
+  }
+
+  for (const item of document.items) {
+    const { skuMaster, warning } = await resolveSku(item[codeField]);
+
+    item.skuMaster = skuMaster ? skuMaster._id : null;
+    item.skuName = skuMaster ? skuMaster.name : null;
+    item.warning = warning;
+  }
+
+  return document.items;
+}
+
 // Check if a value is a "hard violation" reason code
 function isHardViolation(reason) {
   return [
@@ -100,24 +117,24 @@ async function getMatch(poNumber) {
     reasons.push('invoice_date_after_po_date');
   }
 
-  // Resolve and permanently save PO SKU mappings
+  // Resolve PO SKU mappings (read-only, don't overwrite document)
   const poItems = primaryPO
-    ? await resolveAndSaveDocumentItems(primaryPO)
+    ? await resolveDocumentItems(primaryPO)
     : [];
 
-// Resolve and permanently save GRN SKU mappings
+// Resolve GRN SKU mappings (read-only)
 const allGrnItems = [];
 
 for (const grn of grns) {
-  const resolved = await resolveAndSaveDocumentItems(grn);
+  const resolved = await resolveDocumentItems(grn);
   allGrnItems.push(...resolved);
 }
 
-// Resolve and permanently save Invoice SKU mappings
+// Resolve Invoice SKU mappings (read-only)
 const allInvoiceItems = [];
 
 for (const inv of invoices) {
-  const resolved = await resolveAndSaveDocumentItems(inv);
+  const resolved = await resolveDocumentItems(inv);
   allInvoiceItems.push(...resolved);
 }
 
