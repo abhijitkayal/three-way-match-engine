@@ -9,6 +9,7 @@ Return ONLY valid JSON (no markdown, no explanation) in this exact format:
   "poNumber": "string",
   "poDate": "YYYY-MM-DD or null",
   "vendorName": "string",
+  "totalAmount": number,
   "items": [
     {
       "itemCode": "string (ERP code or SKU code)",
@@ -21,6 +22,7 @@ Return ONLY valid JSON (no markdown, no explanation) in this exact format:
 }
 Rules:
 - itemCode should be the ERP code / item code / SKU code from the document
+- totalAmount is the total amount of the PO
 - If a field is not found, use null or 0
 - Extract ALL line items, do not skip any
 - Return ONLY the JSON object`;
@@ -32,11 +34,13 @@ Return ONLY valid JSON (no markdown, no explanation) in this exact format:
   "grnNumber": "string",
   "poNumber": "string",
   "grnDate": "YYYY-MM-DD or null",
+  "totalAmount": number,
   "items": [
     {
       "itemCode": "string (ERP code or SKU code)",
       "description": "string (product name)",
       "receivedQuantity": number,
+      "unitRate": number,
       "mrp": number
     }
   ]
@@ -44,6 +48,9 @@ Return ONLY valid JSON (no markdown, no explanation) in this exact format:
 Rules:
 - itemCode should be the ERP code / item code / SKU code from the document
 - receivedQuantity is the quantity actually received
+- unitRate is the unit price per item
+- mrp is the maximum retail price if shown
+- totalAmount is the total amount of the GRN
 - If a field is not found, use null or 0
 - Extract ALL line items, do not skip any
 - Return ONLY the JSON object`;
@@ -55,6 +62,7 @@ Return ONLY valid JSON (no markdown, no explanation) in this exact format:
   "invoiceNumber": "string",
   "poNumber": "string",
   "invoiceDate": "YYYY-MM-DD or null",
+  "totalAmount": number,
   "items": [
     {
       "itemCode": "string (ERP code or SKU code)",
@@ -69,6 +77,7 @@ Rules:
 - itemCode should be the ERP code / item code / SKU code from the document
 - unitRate is the price per unit charged
 - mrp is the maximum retail price if shown
+- totalAmount is the total amount of the invoice
 - If a field is not found, use null or 0
 - Extract ALL line items, do not skip any
 - Return ONLY the JSON object`;

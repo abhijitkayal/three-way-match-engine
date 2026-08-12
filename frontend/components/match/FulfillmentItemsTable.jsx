@@ -1,13 +1,35 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import { formatQty, formatCurrency } from '../../lib/constants';
+import { apiFetch } from '../../lib/api';
 
 export default function FulfillmentItemsTable({ poDocument, invoice, grn }) {
+  const [skuMasters, setSkuMasters] = useState([]);
+  const [loadingSku, setLoadingSku] = useState(true);
+
+  useEffect(() => {
+    async function fetchSkuMasters() {
+      try {
+        const data = await apiFetch('/masters/sku');
+        setSkuMasters(Array.isArray(data) ? data : []);
+      } catch (error) {
+        console.error('SKU master fetch error:', error);
+        setSkuMasters([]);
+      } finally {
+        setLoadingSku(false);
+      }
+    }
+    fetchSkuMasters();
+  }, []);
+
   if (!poDocument && !invoice) {
+    return <div>No data available.</div>;
+  }
+
+  if (loadingSku) {
     return (
-      <div className="bg-card rounded-lg border p-6 text-center text-muted-foreground">
-        No data available.
-      </div>
+      <div className="p-4 text-sm text-muted-foreground">Loading SKU master...</div>
     );
   }
 
@@ -15,164 +37,112 @@ export default function FulfillmentItemsTable({ poDocument, invoice, grn }) {
   const invoiceItems = invoice?.items || [];
   const grnItems = grn?.items || [];
 
-  // Build PO lookup by itemCode (ERP code)
+  // PO lookup by itemCode (ERP code)
   const poByCode = {};
   for (const item of poItems) {
     const code = String(item.itemCode || '').trim().toLowerCase();
-    if (code) {
-      if (!poByCode[code]) {
-        poByCode[code] = { totalQty: 0, item: item };
-      }
-      poByCode[code].totalQty += item.quantity || 0;
-    }
+    if (!code) continue;
+    if (!poByCode[code]) poByCode[code] = { totalQty: 0, item };
+    poByCode[code].totalQty += Number(item.quantity || 0);
   }
 
-  // Build GRN lookup by itemCode
+  // GRN lookup by itemCode
   const grnByCode = {};
   for (const item of grnItems) {
     const code = String(item.itemCode || '').trim().toLowerCase();
-    if (code) {
-      if (!grnByCode[code]) {
-        grnByCode[code] = { totalQty: 0 };
-      }
-      grnByCode[code].totalQty += item.receivedQuantity || 0;
-    }
+    if (!code) continue;
+    if (!grnByCode[code]) grnByCode[code] = { totalQty: 0 };
+    grnByCode[code].totalQty += Number(item.receivedQuantity || 0);
   }
 
+  // SKU lookup by eanCode
+  const skuByEan = {};
+  for (const sku of skuMasters) {
+    const ean = String(sku.eanCode || '').trim().toLowerCase();
+    if (ean) skuByEan[ean] = sku;
+  }
+
+  // Build invoice items
   const allItems = [];
-
-  // Start from ALL invoice items (primary source)
   for (const invItem of invoiceItems) {
-    const invCode = String(invItem.itemCode || '').trim();
-    const invCodeLower = invCode.toLowerCase();
-    const quantity = invItem.quantity || 0;
-    const rate = invItem.unitRate || 0;
-    const mrp = invItem.mrp || 0;
+    const invoiceCode = String(invItem.itemCode || '').trim();
+    const invoiceCodeLower = invoiceCode.toLowerCase();
 
-    // Look up SKU via eanCode (invoice item code = EAN code in SKU master)
-    const sku = invItem.skuMaster || null;
+    // Invoice item code = eanCode in SKU master → get skuErpCode
+    const sku = skuByEan[invoiceCodeLower] || null;
+    const erpCode = sku?.skuErpCode || '-';
 
-    // Check if this SKU's skuErpCode exists in PO items
+    // Match PO using ERP code
     let poMatch = null;
-    if (sku && sku.skuErpCode) {
-      const erpCode = String(sku.skuErpCode).trim().toLowerCase();
-      poMatch = poByCode[erpCode] || null;
-    }
-    // Fallback: direct code match
-    if (!poMatch) {
-      poMatch = poByCode[invCodeLower] || null;
+    if (erpCode !== '-') {
+      poMatch = poByCode[erpCode.toLowerCase()] || null;
     }
 
-    const poQty = poMatch ? poMatch.totalQty : 0;
-
-    // GRN lookup via SKU erpCode or direct code
+    // Match GRN using ERP code
     let grnQty = 0;
-    if (sku && sku.skuErpCode) {
-      const erpCode = String(sku.skuErpCode).trim().toLowerCase();
-      grnQty = grnByCode[erpCode]?.totalQty || 0;
-    }
-    if (!grnQty) {
-      grnQty = grnByCode[invCodeLower]?.totalQty || 0;
+    if (erpCode !== '-') {
+      grnQty = grnByCode[erpCode.toLowerCase()]?.totalQty || 0;
     }
 
     allItems.push({
-      itemCode: invCode,
-      skuName: sku?.name || invItem.skuName || '-',
-      erpCode: sku?.skuErpCode || poMatch?.item?.itemCode || '-',
-      eanCode: sku?.eanCode || invCode,
-      poQty,
-      invoiceQty: quantity,
+      itemCode: invoiceCode,
+      invoiceQty: Number(invItem.quantity || 0),
+      rate: Number(invItem.unitRate || 0),
+      mrp: Number(invItem.mrp || 0),
+      skuName: sku?.name || invItem.description || '-',
+      eanCode: sku?.eanCode || invoiceCode,
+      erpCode,
+      agreedRate: Number(sku?.agreedRate || 0),
+      poQty: poMatch ? poMatch.totalQty : 0,
       grnQty,
-      rate,
-      mrp,
-      agreedRate: sku?.agreedRate || 0,
+      skuMatched: !!sku,
       inPO: !!poMatch,
       source: 'invoice',
     });
   }
 
-  // Add PO-only items (in PO but not in invoice)
-  for (const [erpCode, poData] of Object.entries(poByCode)) {
-    const existsInInvoice = allItems.some(item => {
-      const sku = item.skuName !== '-' ? item : null;
-      return item.erpCode?.toLowerCase() === erpCode;
-    });
-    if (existsInInvoice) continue;
-
-    const item = poData.item;
-    const sku = item.skuMaster || null;
-
-    let grnQty = 0;
-    if (sku && sku.skuErpCode) {
-      grnQty = grnByCode[String(sku.skuErpCode).trim().toLowerCase()]?.totalQty || 0;
-    }
-    if (!grnQty) {
-      grnQty = grnByCode[erpCode]?.totalQty || 0;
-    }
-
-    allItems.push({
-      itemCode: item.itemCode || erpCode,
-      skuName: sku?.name || item.description || '-',
-      erpCode: item.itemCode || erpCode,
-      eanCode: sku?.eanCode || '-',
-      poQty: poData.totalQty,
-      invoiceQty: 0,
-      grnQty,
-      rate: 0,
-      mrp: 0,
-      agreedRate: sku?.agreedRate || 0,
-      inPO: true,
-      source: 'po',
-    });
-  }
-
   function getStatus(item) {
-    if (!item.inPO) {
-      return { label: 'Not Present in PO', color: 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300' };
+    if (!item.skuMatched) {
+      return { label: 'Not found in PO', color: 'bg-red-50 text-red-700 dark:bg-red-950 dark:text-red-300' };
     }
-    if (item.invoiceQty > 0 && item.poQty > 0) {
-      return { label: 'Match', color: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300' };
+    if (item.invoiceQty === item.poQty && item.grnQty === item.invoiceQty) {
+      return { label: 'Match', color: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300' };
     }
-    if (item.poQty > 0 && item.invoiceQty === 0) {
-      return { label: 'PO Only', color: 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300' };
-    }
-    return { label: 'Match', color: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300' };
+    return { label: 'Mismatch', color: 'bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300' };
   }
 
   return (
-    <div className="bg-card rounded-lg border overflow-hidden">
-      <div className="px-4 py-3 border-b border-border">
-        <h4 className="text-sm font-semibold">Fulfillment Items</h4>
-      </div>
-      <div className="overflow-x-auto">
-        <table className="min-w-full text-xs">
+    <div className="space-y-4">
+      <h3 className="text-sm font-semibold">Fulfillment Items</h3>
+      <div className="border rounded-lg overflow-hidden">
+        <table className="w-full text-sm">
           <thead>
             <tr className="bg-muted/50">
-              <th className="text-left px-3 py-2.5 border-b border-r border-border font-semibold w-10">#</th>
-              <th className="text-left px-3 py-2.5 border-b border-r border-border font-semibold">Invoice Item Code (EAN)</th>
-              <th className="text-left px-3 py-2.5 border-b border-r border-border font-semibold">Item Name</th>
-              <th className="text-left px-3 py-2.5 border-b border-r border-border font-semibold">ERP Code</th>
-              <th className="text-right px-3 py-2.5 border-b border-r border-border font-semibold">PO Qty</th>
-              <th className="text-right px-3 py-2.5 border-b border-r border-border font-semibold">Invoice Qty</th>
-              <th className="text-right px-3 py-2.5 border-b border-r border-border font-semibold">GRN Qty</th>
-              <th className="text-right px-3 py-2.5 border-b border-r border-border font-semibold">Rate</th>
-              <th className="text-center px-3 py-2.5 border-b border-border font-semibold">Status</th>
+              <th className="px-4 py-3 text-left">#</th>
+              <th className="px-4 py-3 text-left">Invoice Item Code (EAN)</th>
+              <th className="px-4 py-3 text-left">Item Name</th>
+              <th className="px-4 py-3 text-left">ERP Code</th>
+              <th className="px-4 py-3 text-left">PO Qty</th>
+              <th className="px-4 py-3 text-left">Invoice Qty</th>
+              <th className="px-4 py-3 text-left">GRN Qty</th>
+              <th className="px-4 py-3 text-left">Rate</th>
+              <th className="px-4 py-3 text-left">Status</th>
             </tr>
           </thead>
           <tbody>
             {allItems.map((item, idx) => {
               const status = getStatus(item);
               return (
-                <tr key={idx} className={`hover:bg-muted/50 transition-colors ${!item.inPO ? 'bg-red-50/50 dark:bg-red-950/50' : ''}`}>
-                  <td className="px-3 py-2 border-b border-r border-border text-muted-foreground">{idx + 1}</td>
-                  <td className="px-3 py-2 border-b border-r border-border font-mono">{item.itemCode}</td>
-                  <td className="px-3 py-2 border-b border-r border-border font-medium">{item.skuName}</td>
-                  <td className="px-3 py-2 border-b border-r border-border font-mono text-muted-foreground">{item.erpCode}</td>
-                  <td className="px-3 py-2 border-b border-r border-border text-right tabular-nums">{item.poQty > 0 ? formatQty(item.poQty) : '-'}</td>
-                  <td className="px-3 py-2 border-b border-r border-border text-right tabular-nums">{item.invoiceQty > 0 ? formatQty(item.invoiceQty) : '-'}</td>
-                  <td className="px-3 py-2 border-b border-r border-border text-right tabular-nums">{item.grnQty > 0 ? formatQty(item.grnQty) : '-'}</td>
-                  <td className="px-3 py-2 border-b border-r border-border text-right tabular-nums">{item.rate > 0 ? formatCurrency(item.rate) : '-'}</td>
-                  <td className="px-3 py-2 border-b border-border text-center">
+                <tr key={idx} className={`border-t hover:bg-muted/50 transition-colors ${!item.inPO ? 'bg-red-50/50 dark:bg-red-950/50' : ''}`}>
+                  <td className="px-4 py-3">{idx + 1}</td>
+                  <td className="px-4 py-3">{item.itemCode || '-'}</td>
+                  <td className="px-4 py-3">{item.skuName || '-'}</td>
+                  <td className="px-4 py-3 font-medium">{item.erpCode || '-'}</td>
+                  <td className="px-4 py-3">{item.poQty > 0 ? formatQty(item.poQty) : '-'}</td>
+                  <td className="px-4 py-3">{item.invoiceQty > 0 ? formatQty(item.invoiceQty) : '-'}</td>
+                  <td className="px-4 py-3">{item.grnQty > 0 ? formatQty(item.grnQty) : '-'}</td>
+                  <td className="px-4 py-3">{item.rate > 0 ? formatCurrency(item.rate) : '-'}</td>
+                  <td className="px-4 py-3">
                     <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium ${status.color}`}>
                       {status.label}
                     </span>

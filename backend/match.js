@@ -324,6 +324,7 @@ for (const inv of invoices) {
         poNumber: primaryPO.poNumber,
         poDate: primaryPO.poDate,
         vendorName: primaryPO.vendorName,
+        totalAmount: primaryPO.totalAmount || 0,
         items: primaryPO.items,
         filePath: primaryPO.filePath,
       } : null,

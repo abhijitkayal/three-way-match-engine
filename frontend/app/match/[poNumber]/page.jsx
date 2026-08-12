@@ -160,7 +160,9 @@ export default function MatchPage() {
         {activeTab === 'fulfillment' && (
           <div className="space-y-6">
             {matchData.items && matchData.items.length > 0 && (() => {
-              const totalOrdered = matchData.items.reduce((s, i) => s + (i.poQty || 0), 0);
+              const totalOrdered = poDocument
+                ? (poDocument.items || []).reduce((s, i) => s + (Number(i.quantity) || 0), 0)
+                : matchData.items.reduce((s, i) => s + (i.poQty || 0), 0);
               const totalReceived = matchData.items.reduce((s, i) => s + (i.grnQty || 0), 0);
               const totalInvoiced = matchData.items.reduce((s, i) => s + (i.invoiceQty || 0), 0);
               const pending = Math.max(0, totalOrdered - totalReceived);

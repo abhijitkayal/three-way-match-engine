@@ -56,8 +56,8 @@ export function NavMain({ items }) {
                   isActive={isActive}
                   className={
                     isActive
-                      ? "bg-black text-white hover:bg-black hover:text-white"
-                      : " hover:bg-gray-100 hover:text-black"
+                      ? "bg-primary-600 text-white hover:bg-primary-700 hover:text-white dark:bg-primary-700 dark:hover:bg-primary-800"
+                      : "hover:bg-zinc-100 hover:text-foreground dark:hover:bg-zinc-800 dark:hover:text-white"
                   }
                 >
                   <Link href={item.url} className="flex gap-2 p-2" >

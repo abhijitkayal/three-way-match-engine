@@ -39,6 +39,7 @@ export default function SummaryTab({ summary, matchData }) {
     if (!summary || !matchData) return null;
 
     const po = matchData.documents?.po || null;
+    console.log(po);
     const grns = matchData.documents?.grns || [];
     const invoices = matchData.documents?.invoices || [];
     const items = matchData.items || [];
@@ -47,11 +48,16 @@ export default function SummaryTab({ summary, matchData }) {
     const hasGRN = grns.length > 0;
     const hasInvoice = invoices.length > 0;
 
-    const totalPoQty = items.reduce((s, i) => s + (i.poQty || 0), 0);
+    // Original PO quantity from PO document (not from matched items)
+    const totalPoQty = hasPO
+      ? (po.items || []).reduce((s, i) => s + (Number(i.quantity) || 0), 0)
+      : items.reduce((s, i) => s + (i.poQty || 0), 0);
     const totalReceivedQty = items.reduce((s, i) => s + (i.grnQty || 0), 0);
     const totalInvoiceQty = items.reduce((s, i) => s + (i.invoiceQty || 0), 0);
 
-    const poAmount = items.reduce((s, i) => s + ((i.poQty || 0) * (i.agreedRate || 0)), 0);
+    const poAmount = hasPO
+      ? (po.totalAmount || (po.items || []).reduce((s, i) => s + ((Number(i.quantity) || 0) * (Number(i.unitRate) || 0)), 0))
+      : items.reduce((s, i) => s + ((i.poQty || 0) * (i.agreedRate || 0)), 0);
     const invoiceAmount = items.reduce((s, i) => s + ((i.invoiceQty || 0) * (i.invoiceRate || 0)), 0);
 
     const pendingQty = Math.max(0, totalPoQty - totalReceivedQty);
@@ -432,10 +438,15 @@ export default function SummaryTab({ summary, matchData }) {
               </div>
               <div className="w-full h-2.5 bg-zinc-100 dark:bg-zinc-800 rounded-full overflow-hidden">
                 <div
-                  className="h-full rounded-full transition-all duration-500"
+                  className={`h-full rounded-full transition-all duration-500 ${
+                    data.fulfillmentPct >= 100
+                      ? 'bg-emerald-500'
+                      : data.fulfillmentPct >= 50
+                        ? 'bg-amber-500'
+                        : 'bg-red-500'
+                  }`}
                   style={{
                     width: `${Math.min(100, data.fulfillmentPct)}%`,
-                    backgroundColor: data.fulfillmentPct >= 100 ? '#10b981' : data.fulfillmentPct >= 50 ? '#f59e0b' : '#ef4444',
                   }}
                 />
               </div>
@@ -531,10 +542,10 @@ export default function SummaryTab({ summary, matchData }) {
       </div>
 
       {/* SECTION 5: THREE-WAY MATCH RESULT */}
-      <div className="bg-card rounded-lg border p-5">
+      {/* <div className="bg-card rounded-lg border p-5">
         <h3 className="text-sm font-semibold mb-4">Three-Way Match</h3>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {/* PO vs GRN */}
+          
           <div className="border rounded-lg p-4 space-y-3">
             <div className="flex items-center gap-1">
               <span className="text-xs font-semibold bg-primary-50 dark:bg-primary-950 text-primary-700 dark:text-primary-300 px-2 py-0.5 rounded">PO</span>
@@ -568,7 +579,7 @@ export default function SummaryTab({ summary, matchData }) {
             </div>
           </div>
 
-          {/* PO vs Invoice */}
+         
           <div className="border rounded-lg p-4 space-y-3">
             <div className="flex items-center gap-1">
               <span className="text-xs font-semibold bg-primary-50 dark:bg-primary-950 text-primary-700 dark:text-primary-300 px-2 py-0.5 rounded">PO</span>
@@ -606,7 +617,7 @@ export default function SummaryTab({ summary, matchData }) {
             </div>
           </div>
 
-          {/* GRN vs Invoice */}
+          
           <div className="border rounded-lg p-4 space-y-3">
             <div className="flex items-center gap-1">
               <span className="text-xs font-semibold bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 px-2 py-0.5 rounded">GRN</span>
@@ -645,143 +656,9 @@ export default function SummaryTab({ summary, matchData }) {
             </div>
           </div>
         </div>
-      </div>
-
-      {/* SECTION 6: SKU-LEVEL MATCHING */}
-      {/* <div className="bg-card rounded-lg border">
-        <div className="px-4 py-3 border-b border-border">
-          <h3 className="text-sm font-semibold">SKU-Level Matching</h3>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="min-w-full text-xs">
-            <thead>
-              <tr className="bg-muted/50">
-                <th className="text-left px-3 py-2.5 font-medium text-muted-foreground border-b border-r border-border">SKU</th>
-                <th className="text-left px-3 py-2.5 font-medium text-muted-foreground border-b border-r border-border">SKU Name</th>
-                <th className="text-right px-3 py-2.5 font-medium text-muted-foreground border-b border-r border-border">PO Qty</th>
-                <th className="text-right px-3 py-2.5 font-medium text-muted-foreground border-b border-r border-border">Received Qty</th>
-                <th className="text-right px-3 py-2.5 font-medium text-muted-foreground border-b border-r border-border">Invoice Qty</th>
-                <th className="text-right px-3 py-2.5 font-medium text-muted-foreground border-b border-r border-border">PO Rate</th>
-                <th className="text-right px-3 py-2.5 font-medium text-muted-foreground border-b border-r border-border">Invoice Rate</th>
-                <th className="text-right px-3 py-2.5 font-medium text-muted-foreground border-b border-r border-border">MRP</th>
-                <th className="text-right px-3 py-2.5 font-medium text-muted-foreground border-b border-r border-border">Qty Variance</th>
-                <th className="text-right px-3 py-2.5 font-medium text-muted-foreground border-b border-r border-border">Price Variance</th>
-                <th className="text-center px-3 py-2.5 font-medium text-muted-foreground border-b">Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.skuMatches.length === 0 ? (
-                <tr>
-                  <td colSpan={11} className="px-4 py-6 text-center text-muted-foreground text-sm">
-                    No SKU items found.
-                  </td>
-                </tr>
-              ) : (
-                data.skuMatches.map((item, idx) => {
-                  const hasIssue = item.reasons && item.reasons.length > 0;
-                  let itemStatus = 'MATCH';
-                  let itemStatusColor = 'text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950';
-                  if (!item.skuName) {
-                    itemStatus = 'Unmapped';
-                    itemStatusColor = 'text-zinc-600 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-800';
-                  } else if (hasIssue) {
-                    if (item.reasons.includes('invoice_qty_exceeds_po_qty') || item.reasons.includes('invoice_qty_exceeds_grn_qty')) {
-                      itemStatus = 'Qty Mismatch';
-                      itemStatusColor = 'text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950';
-                    } else if (item.reasons.includes('price_mismatch')) {
-                      itemStatus = 'Rate Mismatch';
-                      itemStatusColor = 'text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950';
-                    } else {
-                      itemStatus = 'Mismatch';
-                      itemStatusColor = 'text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950';
-                    }
-                  } else if (item.poQty > 0 && item.grnQty < item.poQty) {
-                    itemStatus = 'Pending';
-                    itemStatusColor = 'text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950';
-                  }
-                  return (
-                    <tr key={idx} className={`${hasIssue ? 'bg-amber-50/50 dark:bg-amber-950/50' : ''} hover:bg-muted/50`}>
-                      <td className="px-3 py-2 border-b border-r border-border font-medium">{item.erpCode || '-'}</td>
-                      <td className="px-3 py-2 border-b border-r border-border">
-                        {item.skuName || <span className="text-muted-foreground italic">Unmapped SKU</span>}
-                      </td>
-                      <td className="px-3 py-2 border-b border-r border-border text-right">{item.poQty || 0}</td>
-                      <td className="px-3 py-2 border-b border-r border-border text-right">
-                        {data.hasGRN ? (item.grnQty || 0) : <span className="text-muted-foreground">-</span>}
-                      </td>
-                      <td className="px-3 py-2 border-b border-r border-border text-right">
-                        {data.hasInvoice ? (item.invoiceQty || 0) : <span className="text-muted-foreground">-</span>}
-                      </td>
-                      <td className="px-3 py-2 border-b border-r border-border text-right">
-                        {item.agreedRate ? formatCurrency(item.agreedRate) : '-'}
-                      </td>
-                      <td className="px-3 py-2 border-b border-r border-border text-right">
-                        {item.invoiceRate ? formatCurrency(item.invoiceRate) : '-'}
-                      </td>
-                      <td className="px-3 py-2 border-b border-r border-border text-right">
-                        {item.mrp ? formatCurrency(item.mrp) : '-'}
-                      </td>
-                      <td className="px-3 py-2 border-b border-r border-border text-right">
-                        {data.hasGRN ? (
-                          <span className={item.qtyVariancePoGrn > 0 ? 'text-amber-600 dark:text-amber-400' : item.qtyVariancePoGrn < 0 ? 'text-red-600 dark:text-red-400' : ''}>
-                            {item.qtyVariancePoGrn > 0 ? `+${item.qtyVariancePoGrn}` : item.qtyVariancePoGrn}
-                          </span>
-                        ) : '-'}
-                      </td>
-                      <td className="px-3 py-2 border-b border-r border-border text-right">
-                        {item.invoiceRate > 0 && item.agreedRate > 0 ? (
-                          <span className={Math.abs(item.priceVariancePct) > 5 ? 'text-amber-600 dark:text-amber-400' : ''}>
-                            {item.priceVariancePct > 0 ? '+' : ''}{item.priceVariancePct.toFixed(1)}%
-                          </span>
-                        ) : '-'}
-                      </td>
-                      <td className="px-3 py-2 border-b text-center">
-                        <span className={`inline-block text-[10px] font-medium px-2 py-0.5 rounded-full ${itemStatusColor}`}>
-                          {itemStatus}
-                        </span>
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
       </div> */}
 
-      {/* SECTION 8: ISSUES DETECTED */}
-      {/* {data.issues.length > 0 && (
-        <div className="bg-card rounded-lg border">
-          <div className="px-4 py-3 border-b border-border">
-            <h3 className="text-sm font-semibold">Issues Detected</h3>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="min-w-full text-xs">
-              <thead>
-                <tr className="bg-muted/50">
-                  <th className="text-left px-4 py-2.5 font-medium text-muted-foreground border-b">Issue</th>
-                  <th className="text-left px-4 py-2.5 font-medium text-muted-foreground border-b">Document / SKU</th>
-                  <th className="text-left px-4 py-2.5 font-medium text-muted-foreground border-b">Expected</th>
-                  <th className="text-left px-4 py-2.5 font-medium text-muted-foreground border-b">Actual</th>
-                  <th className="text-center px-4 py-2.5 font-medium text-muted-foreground border-b">Severity</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.issues.map((issue, idx) => (
-                  <tr key={idx} className="hover:bg-muted/50">
-                    <td className="px-4 py-2.5 border-b font-medium">{issue.issue}</td>
-                    <td className="px-4 py-2.5 border-b text-muted-foreground">{issue.document}</td>
-                    <td className="px-4 py-2.5 border-b text-muted-foreground">{issue.expected}</td>
-                    <td className="px-4 py-2.5 border-b text-muted-foreground">{issue.actual}</td>
-                    <td className="px-4 py-2.5 border-b text-center"><SeverityBadge severity={issue.severity} /></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )} */}
-
+  
       {/* Empty state when no issues */}
       {data.issues.length === 0 && (
         <div className="bg-card rounded-lg border p-5">

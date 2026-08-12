@@ -140,7 +140,7 @@ export default function SkuMasterPage() {
         </div>
         <button
           onClick={openCreate}
-          className="inline-flex items-center gap-2 bg-primary-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-primary-700 transition-colors"
+          className="inline-flex items-center gap-2 bg-primary-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-primary-700 dark:hover:bg-primary-500 transition-colors"
         >
           <Plus size={16} />
           Add SKU
@@ -263,7 +263,7 @@ export default function SkuMasterPage() {
                 <button
                   type="submit"
                   disabled={saving}
-                  className="px-4 py-2 text-sm bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50 inline-flex items-center gap-2 transition-colors"
+                  className="px-4 py-2 text-sm bg-primary-600 text-white rounded-lg hover:bg-primary-700 dark:hover:bg-primary-500 disabled:opacity-50 inline-flex items-center gap-2 transition-colors"
                 >
                   {saving && <Loader2 size={14} className="animate-spin" />}
                   {editingId ? 'Save Changes' : 'Create SKU'}
@@ -311,7 +311,7 @@ export default function SkuMasterPage() {
                       <div className="inline-flex gap-1">
                         <button
                           onClick={() => openEdit(sku)}
-                          className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-primary-600 transition-colors"
+                          className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-primary-600 dark:hover:text-primary-400 transition-colors"
                           title="Edit"
                         >
                           <Pencil size={14} />

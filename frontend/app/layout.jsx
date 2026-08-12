@@ -8,6 +8,9 @@ const geist = Geist({subsets:['latin'],variable:'--font-sans'});
 export const metadata = {
   title: 'Finifi Match - Three-Way Match Engine',
   description: 'Professional PO, GRN & Invoice Three-Way Matching for finance and procurement',
+  icons: {
+    icon: '/icon.jpg',
+  },
 };
 
 export default function RootLayout({ children }) {

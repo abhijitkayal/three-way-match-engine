@@ -99,7 +99,9 @@ export default function DocumentsPage() {
                             <th className="text-left px-4 py-2.5 font-medium text-muted-foreground border-b">Description</th>
                             <th className="text-right px-4 py-2.5 font-medium text-muted-foreground border-b">Qty</th>
                             <th className="text-right px-4 py-2.5 font-medium text-muted-foreground border-b">Rate</th>
-                            <th className="text-right px-4 py-2.5 font-medium text-muted-foreground border-b">MRP</th>
+                            {selectedDoc.documentType !== 'invoice' && (
+                              <th className="text-right px-4 py-2.5 font-medium text-muted-foreground border-b">MRP</th>
+                            )}
                           </tr>
                         </thead>
                         <tbody>
@@ -114,9 +116,11 @@ export default function DocumentsPage() {
                               <td className="px-4 py-2.5 border-b text-right">
                                 {item.unitRate != null ? Number(item.unitRate).toFixed(2) : '-'}
                               </td>
-                              <td className="px-4 py-2.5 border-b text-right">
-                                {item.mrp != null ? Number(item.mrp).toFixed(2) : '-'}
-                              </td>
+                              {selectedDoc.documentType !== 'invoice' && (
+                                <td className="px-4 py-2.5 border-b text-right">
+                                  {item.mrp != null ? Number(item.mrp).toFixed(2) : '-'}
+                                </td>
+                              )}
                             </tr>
                           ))}
                         </tbody>

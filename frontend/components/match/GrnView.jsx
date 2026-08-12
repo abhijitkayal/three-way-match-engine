@@ -48,10 +48,12 @@ function buildGrnItemRows(grnItems, poItems, matchItems) {
     const receivedQty = Number(grnItem.receivedQuantity) || 0;
     const poQty = poItem ? Number(poItem.quantity) || 0 : null;
     const pending = poQty !== null ? Math.max(0, poQty - receivedQty) : null;
-    const unitPrice = sku?.agreedRate ?? null;
+    const unitPrice = grnItem.unitRate || sku?.agreedRate || null;
     const mrp = grnItem.mrp || sku?.mrp || null;
     const grossAmount = unitPrice != null ? receivedQty * unitPrice : null;
-    const reasons = matchItem?.reasons || [];
+    const grnOnlyReasons = ['grn_qty_exceeds_po_qty', 'mrp_mismatch', 'price_mismatch'];
+    const allReasons = matchItem?.reasons || [];
+    const reasons = allReasons.filter((r) => grnOnlyReasons.includes(r));
 
     let status = 'Matched';
     let statusColor =
@@ -61,10 +63,6 @@ function buildGrnItemRows(grnItems, poItems, matchItems) {
       status = 'Unmapped SKU';
       statusColor =
         'text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950';
-    } else if (reasons.includes('item_missing_in_po')) {
-      status = 'Missing in PO';
-      statusColor =
-        'text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950';
     } else if (reasons.includes('grn_qty_exceeds_po_qty')) {
       status = 'Qty Mismatch';
       statusColor =

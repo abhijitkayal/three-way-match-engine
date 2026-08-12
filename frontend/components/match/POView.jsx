@@ -61,6 +61,7 @@ export default function POView({ poDocument }) {
                   <th className="text-left px-3 py-2.5 border-b border-r border-border font-semibold">Description</th>
                   <th className="text-right px-3 py-2.5 border-b border-r border-border font-semibold">Qty</th>
                   <th className="text-right px-3 py-2.5 border-b border-r border-border font-semibold">Unit Rate</th>
+                  <th className="text-right px-3 py-2.5 border-b border-r border-border font-semibold">MRP</th>
                   <th className="text-right px-3 py-2.5 border-b border-r border-border font-semibold">Amount</th>
                   <th className="text-center px-3 py-2.5 border-b border-border font-semibold">SKU</th>
                 </tr>
@@ -73,6 +74,7 @@ export default function POView({ poDocument }) {
                     <td className="px-3 py-2 border-b border-r border-border font-medium">{item.description || '-'}</td>
                     <td className="px-3 py-2 border-b border-r border-border text-right tabular-nums">{formatQty(item.quantity)}</td>
                     <td className="px-3 py-2 border-b border-r border-border text-right tabular-nums">{item.unitRate ? formatCurrency(item.unitRate) : '-'}</td>
+                    <td className="px-3 py-2 border-b border-r border-border text-right tabular-nums">{item.mrp ? formatCurrency(item.mrp) : '-'}</td>
                     <td className="px-3 py-2 border-b border-r border-border text-right font-medium tabular-nums">
                       {item.unitRate ? formatCurrency((item.quantity || 0) * item.unitRate) : '-'}
                     </td>
@@ -80,8 +82,8 @@ export default function POView({ poDocument }) {
                       <span
                         className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium ${
                           item.skuMaster
-                            ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300'
-                            : 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300'
+                            ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300'
+                            : 'bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300'
                         }`}
                       >
                         {item.skuMaster ? 'Mapped' : 'Unmapped'}
@@ -96,6 +98,7 @@ export default function POView({ poDocument }) {
                   <td className="px-3 py-2 border-t border-r border-border text-right tabular-nums">
                     {formatQty(poDocument.items.reduce((sum, item) => sum + (item.quantity || 0), 0))}
                   </td>
+                  <td className="px-3 py-2 border-t border-r border-border"></td>
                   <td className="px-3 py-2 border-t border-r border-border"></td>
                   <td className="px-3 py-2 border-t border-r border-border text-right tabular-nums">
                     {formatCurrency(poDocument.items.reduce((sum, item) => sum + ((item.quantity || 0) * (item.unitRate || 0)), 0))}

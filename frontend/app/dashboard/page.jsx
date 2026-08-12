@@ -74,7 +74,7 @@ export default function DashboardPage() {
                               <button
                                 key={po}
                                 onClick={() => handleSelectPo(po)}
-                                className="w-full text-left p-3 rounded border text-sm border-border hover:border-primary-500 hover:bg-primary-50 dark:hover:bg-primary-950 transition-colors"
+                                className="w-full text-left p-3 rounded border text-sm border-border hover:border-primary-500 dark:hover:bg-primary-950 transition-colors"
                               >
                                 <div className="font-medium">{po}</div>
                                 <div className="text-xs text-muted-foreground mt-1">

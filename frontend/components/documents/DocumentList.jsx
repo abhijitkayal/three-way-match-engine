@@ -83,7 +83,7 @@ export default function DocumentList({ onSelect, selectedId, refreshKey }) {
               key={doc._id}
               onClick={() => onSelect(doc)}
               className={`w-full text-left px-4 py-3 hover:bg-muted transition-colors ${
-                selectedId === doc._id ? 'bg-primary-50 dark:bg-primary-950 border-l-2 border-primary-500' : ''
+                selectedId === doc._id ? 'bg-primary-50 dark:bg-transparent border-l-2 border-primary-500' : ''
               }`}
             >
               <div className="flex items-center justify-between">
