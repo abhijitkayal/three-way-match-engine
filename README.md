@@ -151,8 +151,7 @@ finifi/
 ### 1. Clone the repository
 
 ```bash
-git clone <repository-url>
-cd finifi
+git clone <https://github.com/abhijitkayal/three-way-match-engine>
 ```
 
 ### 2. Backend Setup
